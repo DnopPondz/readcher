@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum DocStatus {
+  UPLOADED
+  SCANNING
+  PROCESSING
+  READY
+  REJECTED
+  FAILED
+}
+
+enum CardSource {
+  DEFINITION
+  EXCEL
+  MANUAL
+}
+
+enum QuestionType {
+  CLOZE
+  MCQ
+}
+
+model User {
+  id           String            @id @default(cuid())
+  email        String            @unique
+  name         String?
+  passwordHash String?
+  createdAt    DateTime          @default(now())
+  documents    Document[]
+  flashcards   Flashcard[]
+  attempts     QuizAttempt[]
+  progress     ReadingProgress[]
+}
+
+model Document {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  storageKey   String      @unique
+  status       DocStatus   @default(UPLOADED)
+  language     String?
+  pageCount    Int?
+  errorMessage String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  lessons      Lesson[]
+  passages     Passage[]
+  flashcards   Flashcard[]
+
+  @@index([userId, status])
+}
+
+model Lesson {
+  id                String            @id @default(cuid())
+  documentId        String
+  document          Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  order             Int
+  title             String
+  startPage         Int?
+  endPage           Int?
+  summaryPassageIds String[]
+  passages          Passage[]
+  keyTerms          KeyTerm[]
+  questions         QuizQuestion[]
+  progress          ReadingProgress[]
+
+  @@unique([documentId, order])
+}
+
+model Passage {
+  id         String   @id @default(cuid())
+  documentId String
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lessonId   String
+  lesson     Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  order      Int
+  text       String
+  page       Int?
+
+  @@index([lessonId, order])
+}
+
+model KeyTerm {
+  id       String @id @default(cuid())
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  term     String
+  score    Float
+
+  @@index([lessonId])
+}
+
+model Flashcard {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documentId String
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  lessonId   String?
+  front      String
+  back       String
+  source     CardSource
+  box        Int        @default(1)
+  dueAt      DateTime   @default(now())
+
+  @@index([userId, dueAt])
+}
+
+model QuizQuestion {
+  id        String        @id @default(cuid())
+  lessonId  String
+  lesson    Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  type      QuestionType
+  prompt    String
+  answer    String
+  options   Json?
+  passageId String?
+  attempts  QuizAttempt[]
+}
+
+model QuizAttempt {
+  id         String       @id @default(cuid())
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questionId String
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  correct    Boolean
+  createdAt  DateTime     @default(now())
+}
+
+model ReadingProgress {
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lessonId    String
+  lesson      Lesson    @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lastPassage Int       @default(0)
+  completedAt DateTime?
+
+  @@id([userId, lessonId])
+}
